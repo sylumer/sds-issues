@@ -1,0 +1,90 @@
+name: Pushover Issue Notifications
+
+on:
+  issues:
+    types:
+      - opened
+      - closed
+      - reopened
+      - assigned
+      - unassigned
+  issue_comment:
+    types:
+      - created
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send Pushover notification
+        env:
+          PUSHOVER_TOKEN: ${{ secrets.PUSHOVER_TOKEN }}
+          PUSHOVER_USER: ${{ secrets.PUSHOVER_USER }}
+
+          EVENT_NAME: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+          ISSUE_USER: ${{ github.event.issue.user.login }}
+
+          COMMENT_USER: ${{ github.event.comment.user.login }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+
+        run: |
+          if [ "$EVENT_NAME" = "issue_comment" ]; then
+            TITLE="💬 SDS Issues #${ISSUE_NUMBER}"
+            MESSAGE="${COMMENT_USER} commented on '${ISSUE_TITLE}'"$'\n\n'"${COMMENT_BODY}"
+            PRIORITY=0
+
+          else
+            case "$ACTION" in
+              opened)
+                TITLE="🆕 SDS Issues #${ISSUE_NUMBER}"
+                MESSAGE="${ISSUE_USER} opened '${ISSUE_TITLE}'"
+                PRIORITY=1
+                ;;
+
+              reopened)
+                TITLE="🔄 SDS Issues #${ISSUE_NUMBER}"
+                MESSAGE="${ISSUE_USER} reopened '${ISSUE_TITLE}'"
+                PRIORITY=1
+                ;;
+
+              closed)
+                TITLE="✅ SDS Issues #${ISSUE_NUMBER}"
+                MESSAGE="${ISSUE_USER} closed '${ISSUE_TITLE}'"
+                PRIORITY=0
+                ;;
+
+              assigned)
+                TITLE="👤 SDS Issues #${ISSUE_NUMBER}"
+                MESSAGE="${ISSUE_USER} assigned '${ISSUE_TITLE}'"
+                PRIORITY=0
+                ;;
+
+              unassigned)
+                TITLE="👤 SDS Issues #${ISSUE_NUMBER}"
+                MESSAGE="${ISSUE_USER} removed an assignee from '${ISSUE_TITLE}'"
+                PRIORITY=0
+                ;;
+
+              *)
+                TITLE="📌 SDS Issues #${ISSUE_NUMBER}"
+                MESSAGE="${ISSUE_USER} ${ACTION} '${ISSUE_TITLE}'"
+                PRIORITY=0
+                ;;
+            esac
+          fi
+
+          curl --fail --silent --show-error \
+            --form-string "token=${PUSHOVER_TOKEN}" \
+            --form-string "user=${PUSHOVER_USER}" \
+            --form-string "title=${TITLE}" \
+            --form-string "message=${MESSAGE}" \
+            --form-string "priority=${PRIORITY}" \
+            --form-string "url=${ISSUE_URL}" \
+            --form-string "url_title=Open issue" \
+            https://api.pushover.net/1/messages.json
